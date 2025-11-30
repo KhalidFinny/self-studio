@@ -5,8 +5,8 @@ import os
 from django.conf import settings
 from .utils.camera import Camera
 # Use YOLO detector since we have the model
-from .utils.detection import GestureDetector 
-# from .utils.efficientnet_detector import ResNet50GestureDetector
+# from .utils.detection import GestureDetector 
+from .utils.efficientnet_detector import ResNet50GestureDetector
 
 class CameraService:
     _instance = None
@@ -27,13 +27,13 @@ class CameraService:
         self.camera = Camera(camera_id=0, width=1280, height=720)
         
         # Initialize detector
-        # Path to model
-        model_path = os.path.join(settings.BASE_DIR, 'studio', 'models', 'yolov8n.pt')
+        # Path to model: ../models/resnet50/best_model.keras relative to BASE_DIR
+        model_path = os.path.join(settings.BASE_DIR.parent, 'models', 'resnet50', 'best_model.keras')
         try:
-            self.detector = GestureDetector(model_path=model_path, confidence=0.85)
-            print(f"[SUCCESS] YOLO model loaded from {model_path}")
+            self.detector = ResNet50GestureDetector(model_path=model_path, confidence=0.85)
+            print(f"[SUCCESS] ResNet50 model loaded from {model_path}")
         except Exception as e:
-            print(f"[ERROR] Failed to load YOLO model: {e}")
+            print(f"[ERROR] Failed to load ResNet50 model: {e}")
             self.detector = None
 
         self.imaging_edge = None # Not implemented yet

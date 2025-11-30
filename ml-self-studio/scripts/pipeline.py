@@ -15,7 +15,7 @@ def get_args():
     parser.add_argument("--dataset_dir", type=str, default=os.path.join(os.path.dirname(os.path.dirname(__file__)), "dataset_cropped"), help="Path to the raw dataset directory")
     parser.add_argument("--model_dir", type=str, default="models/resnet50", help="Directory to save the trained model")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for training")
-    parser.add_argument("--epochs", type=int, default=25, help="Number of epochs")
+    parser.add_argument("--epochs", type=int, default=50, help="Number of epochs")
     parser.add_argument("--img_size", type=int, default=224, help="Input image size")
     parser.add_argument("--learning_rate", type=float, default=1e-4, help="Initial learning rate")
     return parser.parse_args()
@@ -96,9 +96,6 @@ def main():
             image_paths.extend(val_files)
             labels.extend([label_idx] * len(val_files))
             
-            # We need to return train/val separately to ensure we don't mix them up later
-            # But the above approach mixes them in the lists. Let's redo to keep them separate.
-            
         train_paths = []
         train_labels = []
         val_paths = []
@@ -140,8 +137,6 @@ def main():
     val_ds = val_ds.map(load_image, num_parallel_calls=tf.data.AUTOTUNE)
     val_ds = val_ds.batch(args.batch_size)
 
-    # class_names is already defined above
-    # class_names = train_ds.class_names
     print(f"[INFO] Classes found: {class_names}")
 
     # Configure dataset for performance
@@ -184,14 +179,11 @@ def main():
 
     # Evaluate on Validation Set
     print("[INFO] Evaluating on validation set...")
-    # Load best model weights
     model.load_weights(checkpoint_path)
 
     y_true = []
     y_pred_probs = []
 
-    # Iterate over the validation dataset to get true labels and predictions
-    # Note: We iterate directly to ensure alignment between images and labels
     for images, labels in val_ds:
         preds = model.predict(images, verbose=0)
         y_true.extend(labels.numpy())

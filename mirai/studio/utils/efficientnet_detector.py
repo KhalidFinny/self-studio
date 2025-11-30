@@ -12,7 +12,7 @@ from tensorflow.keras.applications.resnet50 import preprocess_input
 class ResNet50GestureDetector:
     # Kelas untuk mendeteksi gesture (palm/fist) menggunakan ResNet50
     
-    def __init__(self, model_path="models/resnet50/best_model.h5", confidence=0.85):
+    def __init__(self, model_path="models/resnet50/best_model.keras", confidence=0.85):
         # Inisialisasi detector
         # Args:
         #   model_path: Path ke model ResNet50 (.h5)
@@ -153,9 +153,9 @@ class ResNet50GestureDetector:
             confidence = conf
             label = self.class_names[predicted_class]
             
-            # Cek apakah PALM terdeteksi (Class 1)
-            if predicted_class == 1 and confidence >= self.confidence:
-                detected_palm = True
+            # Cek apakah FIST terdeteksi (Class 0)
+            if predicted_class == 0 and confidence >= self.confidence:
+                detected_palm = True # Variable name kept for compatibility, represents "detected_trigger_gesture"
             
             # Draw bounding box dan label
             x, y, w, h = bbox
@@ -181,7 +181,7 @@ class ResNet50GestureDetector:
             cv2.putText(frame, "No hand detected", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         
-        # Hitung frame berturut-turut dengan palm (trigger)
+        # Hitung frame berturut-turut dengan trigger gesture
         if detected_palm:
             self.fist_detected_frames += 1
         else:
