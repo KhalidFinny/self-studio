@@ -131,35 +131,58 @@ class ResNet50GestureDetector:
         
         return predicted_class, confidence, (palm_prob, fist_prob)
     
-    def detect(self, frame, min_frames=5):
-        # Deteksi gesture pada frame
-        # Args:
-        #   frame: Frame gambar dari camera
-        #   min_frames: Jumlah frame minimum untuk trigger (default: 5)
-        # Returns: tuple: (frame yang sudah di-annotate, apakah fist terdeteksi, should_trigger)
+    def get_detection_result(self, frame):
+        # Deteksi gesture pada frame (tanpa drawing)
+        # Returns: dict result
         
-        # Deteksi tangan
         bbox, landmarks = self.detect_hand(frame)
         
-        detected_palm = False
-        confidence = 0.0
-        label = "no hand"
+        result = {
+            "bbox": bbox,
+            "landmarks": landmarks,
+            "detected_palm": False,
+            "confidence": 0.0,
+            "label": "no hand",
+            "predicted_class": None
+        }
         
         if bbox:
             # Preprocess dan classify
             preprocessed = self.preprocess_frame(frame, bbox)
             predicted_class, conf, probs = self.classify_gesture(preprocessed)
             
-            confidence = conf
-            label = self.class_names[predicted_class]
+            result["confidence"] = conf
+            result["predicted_class"] = predicted_class
+            result["label"] = self.class_names[predicted_class]
             
             # Cek apakah FIST terdeteksi (Class 0)
-            if predicted_class == 0 and confidence >= self.confidence:
-                detected_palm = True # Variable name kept for compatibility, represents "detected_trigger_gesture"
-            
-            # Draw bounding box dan label
+            if predicted_class == 0 and conf >= self.confidence:
+                result["detected_palm"] = True
+                
+        return result
+
+    def annotate_frame(self, frame, result, min_frames=5):
+        # Draw annotations based on result
+        if not result:
+            return frame, False, False
+
+        bbox = result.get("bbox")
+        landmarks = result.get("landmarks")
+        detected_palm = result.get("detected_palm", False)
+        confidence = result.get("confidence", 0.0)
+        label = result.get("label", "")
+        
+        # Hitung frame berturut-turut dengan trigger gesture
+        # Note: This logic needs to be careful if we are skipping frames. 
+        # Ideally state update should happen only on new detection.
+        # But for visualization we just read the state.
+        # We will move state update to update_state method.
+        
+        should_trigger = self.fist_detected_frames >= min_frames and not self.trigger_active
+
+        if bbox:
             x, y, w, h = bbox
-            # Warna hijau jika Palm terdeteksi dan stabil, kuning jika tidak
+            # Warna hijau jika Trigger terdeteksi dan stabil, kuning jika tidak
             color = (0, 255, 0) if detected_palm and self.fist_detected_frames >= min_frames else (0, 255, 255)
             
             cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
@@ -180,17 +203,21 @@ class ResNet50GestureDetector:
             # Tidak ada tangan terdeteksi
             cv2.putText(frame, "No hand detected", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        
-        # Hitung frame berturut-turut dengan trigger gesture
-        if detected_palm:
+                        
+        return frame, detected_palm, should_trigger
+
+    def update_state(self, result):
+        # Update internal state based on result
+        if result and result.get("detected_palm"):
             self.fist_detected_frames += 1
         else:
             self.fist_detected_frames = 0
-        
-        # Trigger hanya jika palm stabil untuk beberapa frame
-        should_trigger = self.fist_detected_frames >= min_frames and not self.trigger_active
-        
-        return frame, detected_palm, should_trigger
+
+    def detect(self, frame, min_frames=5):
+        # Wrapper for backward compatibility
+        result = self.get_detection_result(frame)
+        self.update_state(result)
+        return self.annotate_frame(frame, result, min_frames)
     
     def reset_trigger(self):
         # Reset status trigger

@@ -50,6 +50,9 @@ class CameraService:
             "flash": False
         }
         
+        self.frame_count = 0
+        self.last_result = None
+        
         # Start camera thread
         self.thread = threading.Thread(target=self._camera_loop, daemon=True)
         self.thread.start()
@@ -74,13 +77,21 @@ class CameraService:
             # Detect
             if self.detector:
                 try:
-                    frame, detected_gesture, should_trigger = self.detector.detect(frame)
+                    # Skip frames for detection to improve performance
+                    if self.frame_count % 3 == 0:
+                        self.last_result = self.detector.get_detection_result(frame)
+                        self.detector.update_state(self.last_result)
+                    
+                    # Always draw annotations
+                    frame, detected_gesture, should_trigger = self.detector.annotate_frame(frame, self.last_result)
                     
                     if should_trigger and self.state["countdown"] is None:
                         print("[INFO] Triggering countdown")
                         threading.Thread(target=self.start_countdown, daemon=True).start()
                 except Exception as e:
                     print(f"[ERROR] Detection failed: {e}")
+            
+            self.frame_count += 1
             
             with self.frame_lock:
                 self.frame = frame

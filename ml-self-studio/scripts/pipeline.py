@@ -178,25 +178,44 @@ def main():
     print(f"[INFO] Training finished. Best model saved to {checkpoint_path}")
 
     # Evaluate on Validation Set
+    # Evaluate on Validation Set
     print("[INFO] Evaluating on validation set...")
-    model.load_weights(checkpoint_path)
+    try:
+        model.load_weights(checkpoint_path)
+    except Exception as e:
+        print(f"[ERROR] Failed to load weights: {e}")
+        return
 
+    # Use model.predict for stability
+    print("[INFO] Generating predictions...")
+    try:
+        y_pred_probs = model.predict(val_ds, verbose=1)
+    except Exception as e:
+        print(f"[ERROR] Prediction failed: {e}")
+        return
+    
+    # Extract true labels
+    print("[INFO] Extracting labels...")
     y_true = []
-    y_pred_probs = []
-
-    for images, labels in val_ds:
-        preds = model.predict(images, verbose=0)
-        y_true.extend(labels.numpy())
-        y_pred_probs.extend(preds)
-
+    try:
+        for images, labels in val_ds:
+            y_true.extend(labels.numpy())
+    except Exception as e:
+        print(f"[ERROR] Label extraction failed: {e}")
+        return
+    
     y_true = np.array(y_true)
-    y_pred_probs = np.array(y_pred_probs)
+    # Flatten predictions to match y_true shape
+    y_pred_probs = y_pred_probs.flatten()
     
     # Convert probabilities to binary predictions (threshold 0.5)
     y_pred = (y_pred_probs > 0.5).astype(int)
 
     print("\n[INFO] Classification Report:")
-    print(classification_report(y_true, y_pred, target_names=class_names))
+    try:
+        print(classification_report(y_true, y_pred, target_names=class_names))
+    except Exception as e:
+        print(f"[ERROR] Classification report failed: {e}")
 
 if __name__ == "__main__":
     main()
