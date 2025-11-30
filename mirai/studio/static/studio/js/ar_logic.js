@@ -47,7 +47,7 @@ function init() {
     scene.add(directionalLight);
 
     // 5. Webcam Feed
-    initWebcam();
+    // initWebcam(); // Removed: Using server feed
 
     // 6. Event Listeners
     window.addEventListener('resize', onWindowResize, false);
@@ -64,20 +64,7 @@ function init() {
     animate();
 }
 
-function initWebcam() {
-    const video = document.getElementById('video-feed');
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
-            .then(function(stream) {
-                video.srcObject = stream;
-                video.play();
-            })
-            .catch(function(error) {
-                console.error("Unable to access camera:", error);
-                alert("Please allow camera access to use AR features.");
-            });
-    }
-}
+// function initWebcam() { ... } // Removed
 
 // --- 3D Model Handling ---
 function loadModel(url) {
@@ -224,8 +211,8 @@ function takePhoto() {
     // 1. Create a canvas to combine video and 3D
     const video = document.getElementById('video-feed');
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = video.naturalWidth || 1280;
+    canvas.height = video.naturalHeight || 720;
     const ctx = canvas.getContext('2d');
 
     // 2. Draw Video (Mirrored)
