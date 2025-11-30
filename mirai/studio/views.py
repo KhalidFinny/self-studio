@@ -13,3 +13,6 @@ def video_feed(request):
 def status(request):
     service = CameraService()
     return JsonResponse(service.get_status())
+
+def ar(request):
+    return render(request, 'studio/ar.html')
