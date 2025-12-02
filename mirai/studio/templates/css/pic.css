@@ -1,0 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;700&display=swap');
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: black;
+            overflow: hidden;
+        }
+
+        /* Flash Animation */
+        @keyframes flash {
+            0% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0;
+            }
+        }
+
+        .flash-active {
+            animation: flash 0.5s ease-out forwards;
+        }
+
+        /* Countdown Animation */
+        @keyframes pop {
+            0% {
+                transform: scale(0.5);
+                opacity: 0;
+            }
+
+            50% {
+                transform: scale(1.2);
+                opacity: 1;
+            }
+
+            100% {
+                transform: scale(1.0);
+                opacity: 1;
+            }
+        }
+
+        .countdown-text {
+            animation: pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }

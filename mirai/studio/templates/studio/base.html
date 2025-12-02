@@ -1,0 +1,43 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Self(self) Studio{% endblock %}</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                    },
+                },
+            },
+        }
+    </script>
+    <!-- Local Font Awesome -->
+    <link href="{% static 'studio/fontawesome/css/all.min.css' %}" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'studio/css/pic.css' %}">
+    {% block extra_head %}
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+            }
+        }
+    </script>
+    {% endblock %}
+</head>
+
+<body class="h-screen w-screen relative flex items-center justify-center bg-black overflow-hidden font-sans">
+    {% block content %}{% endblock %}
+
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>

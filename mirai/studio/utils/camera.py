@@ -18,11 +18,24 @@ class Camera:
         
     def open(self):
         # Buka koneksi ke webcam
+        print(f"[INFO] Opening camera {self.camera_id} with CAP_DSHOW...")
         self.cap = cv2.VideoCapture(self.camera_id, cv2.CAP_DSHOW)
+        
+        if not self.cap.isOpened():
+            print(f"[WARN] CAP_DSHOW failed. Trying CAP_MSMF...")
+            self.cap = cv2.VideoCapture(self.camera_id, cv2.CAP_MSMF)
+
+        if not self.cap.isOpened():
+            print(f"[WARN] CAP_MSMF failed. Trying default backend...")
+            self.cap = cv2.VideoCapture(self.camera_id)
+            
         if self.cap.isOpened():
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+            print(f"[SUCCESS] Camera opened: {self.width}x{self.height}")
             return True
+        
+        print("[ERROR] Failed to open camera.")
         return False
     
     def read(self):
@@ -35,6 +48,7 @@ class Camera:
         # Tutup koneksi webcam
         if self.cap:
             self.cap.release()
+            self.cap = None
     
     def is_opened(self):
         # Cek apakah camera terbuka

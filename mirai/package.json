@@ -1,0 +1,20 @@
+{
+  "name": "mirai",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tailwindcss -i ./studio/static/studio/css/input.css -o ./studio/static/studio/css/output.css --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15"
+  },
+  "dependencies": {
+    "@fortawesome/fontawesome-free": "^6.7.1"
+  }
+}

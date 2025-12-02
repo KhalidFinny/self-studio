@@ -1,110 +1,102 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Self(self) Studio</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;700&display=swap');
-        
-        body {
-            font-family: 'Outfit', sans-serif;
-            background-color: black;
-            overflow: hidden;
-        }
-        
-        /* Flash Animation */
-        @keyframes flash {
-            0% { opacity: 1; }
-            100% { opacity: 0; }
-        }
-        .flash-active {
-            animation: flash 0.5s ease-out forwards;
-        }
+{% extends 'studio/base.html' %}
+{% load static %}
 
-        /* Countdown Animation */
-        @keyframes pop {
-            0% { transform: scale(0.5); opacity: 0; }
-            50% { transform: scale(1.2); opacity: 1; }
-            100% { transform: scale(1.0); opacity: 1; }
-        }
-        .countdown-text {
-            animation: pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-    </style>
-</head>
-<body class="h-screen w-screen relative flex items-center justify-center">
+{% block content %}
+<!-- Video Feed (Backend Stream) -->
+<img id="video-feed" src="{% url 'video_feed' %}"
+    class="absolute top-0 left-0 w-full h-full object-cover z-0 scale-x-[-1]">
 
-    <!-- Video Feed -->
-    <img src="{% url 'video_feed' %}" class="absolute top-0 left-0 w-full h-full object-cover opacity-90">
+<!-- AR Container (Three.js) -->
+<div id="ar-container" class="absolute inset-0 z-10 pointer-events-auto"></div>
 
-    <!-- Overlay Container -->
-    <div class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center z-10">
-        
-        <!-- Countdown / Message -->
-        <div id="countdown-container" class="text-center hidden">
-            <h1 id="countdown-text" class="text-[12rem] font-bold text-white drop-shadow-lg countdown-text">
-                3
-            </h1>
+<!-- UI Layer -->
+<div class="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between p-6">
+
+    <div class="flex flex-col items-center w-full mt-10">
+        <div id="countdown-container" class="hidden mb-4">
+            <h1 id="countdown-text" class="text-[8rem] font-bold text-white drop-shadow-lg countdown-text">3</h1>
         </div>
 
-    </div>
-
-    <!-- Instructions Pill -->
-    <div class="absolute bottom-10 z-20 bg-black/50 backdrop-blur-md px-8 py-4 rounded-full border border-white/20 shadow-xl">
-        <div class="flex items-center gap-3">
-            <span class="text-2xl">✊</span>
-            <p class="text-white text-lg font-light tracking-wide">
-                Show your <span class="font-bold text-yellow-400">FIST</span> to take a photo
-            </p>
+        <div class="bg-black/40 backdrop-blur-md px-6 py-3 rounded-full border border-white/10 shadow-lg">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">✋</span>
+                <p class="text-white text-lg font-light tracking-wide">
+                    Show <span class="font-bold text-yellow-400">PALM</span> to snap
+                </p>
+            </div>
         </div>
     </div>
 
-    <!-- Flash Overlay -->
-    <div id="flash-overlay" class="absolute inset-0 bg-white opacity-0 z-50 pointer-events-none"></div>
+    <div class="flex flex-col items-center gap-4 mb-4 pointer-events-auto">
 
-    <script>
-        const countdownContainer = document.getElementById('countdown-container');
-        const countdownText = document.getElementById('countdown-text');
-        const flashOverlay = document.getElementById('flash-overlay');
-        
-        let lastCountdown = null;
+        <div
+            class="flex items-center gap-3 bg-black/40 px-4 py-2 rounded-full backdrop-blur-md border border-white/10 mb-2">
+            <span class="text-white/80 text-xs font-medium uppercase tracking-wider">Scale</span>
+            <input type="range" id="scale-slider" min="0.1" max="2.0" step="0.1" value="0.5"
+                class="w-32 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white hover:accent-yellow-400 transition-colors">
+        </div>
 
-        function updateStatus() {
-            fetch("{% url 'status' %}")
-                .then(response => response.json())
-                .then(data => {
-                    // Handle Countdown/Message
-                    if (data.message) {
-                        countdownContainer.classList.remove('hidden');
-                        
-                        // Only animate if text changes
-                        if (countdownText.innerText !== data.message) {
-                            countdownText.innerText = data.message;
-                            // Reset animation
-                            countdownText.classList.remove('countdown-text');
-                            void countdownText.offsetWidth; // Trigger reflow
-                            countdownText.classList.add('countdown-text');
-                        }
-                    } else {
-                        countdownContainer.classList.add('hidden');
-                        countdownText.innerText = "";
-                    }
+        <div class="flex flex-col items-center gap-2 w-full max-w-lg">
+            <div
+                class="text-white/80 text-xs font-medium tracking-wider uppercase bg-black/30 px-3 py-1 rounded-full backdrop-blur-sm">
+                Stickers
+            </div>
+            <div
+                class="flex gap-4 overflow-x-auto w-full justify-center p-2 bg-black/20 backdrop-blur-md rounded-2xl border border-white/10">
+                <!-- Robot (Removed: Missing File) -->
+                <!-- 
+                    <button
+                        class="character-btn group relative w-14 h-14 rounded-xl overflow-hidden border-2 border-transparent transition-all duration-200 hover:scale-110 focus:outline-none"
+                        data-model="{% static 'studio/models/RobotExpressive.glb' %}">
+                        <div
+                            class="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-600 opacity-80 group-hover:opacity-100 transition">
+                        </div>
+                        <div class="absolute inset-0 flex items-center justify-center text-2xl">🤖</div>
+                        <div
+                            class="absolute bottom-0 left-0 right-0 h-1 bg-white/50 scale-x-0 group-[.active]:scale-x-100 transition-transform">
+                        </div>
+                    </button>
+                    -->
 
-                    // Handle Flash
-                    if (data.flash) {
-                        flashOverlay.classList.add('flash-active');
-                        setTimeout(() => {
-                            flashOverlay.classList.remove('flash-active');
-                        }, 500);
-                    }
-                })
-                .catch(err => console.error("Error fetching status:", err));
-        }
+                <!-- Roblox Avatar -->
+                <button
+                    class="character-btn group relative w-14 h-14 rounded-xl overflow-hidden border-2 border-transparent transition-all duration-200 hover:scale-110 focus:outline-none"
+                    data-model="{% static 'Rbolox avatar.obj' %}">
+                    <div
+                        class="absolute inset-0 bg-gradient-to-br from-orange-500 to-red-600 opacity-80 group-hover:opacity-100 transition">
+                    </div>
+                    <div class="absolute inset-0 flex items-center justify-center text-2xl">🧱</div>
+                    <div
+                        class="absolute bottom-0 left-0 right-0 h-1 bg-white/50 scale-x-0 group-[.active]:scale-x-100 transition-transform">
+                    </div>
+                </button>
 
-        // Poll every 100ms
-        setInterval(updateStatus, 100);
-    </script>
-</body>
-</html>
+                <!-- Clear -->
+                <button
+                    class="character-btn group relative w-14 h-14 rounded-xl overflow-hidden border-2 border-transparent transition-all duration-200 hover:scale-110 focus:outline-none"
+                    onclick="clearModel()">
+                    <div class="absolute inset-0 bg-white/10 group-hover:bg-white/20 transition"></div>
+                    <div class="absolute inset-0 flex items-center justify-center text-xl text-white/50">❌</div>
+                </button>
+            </div>
+        </div>
+
+        <button id="capture-btn" class="hidden"></button>
+    </div>
+</div>
+
+<!-- Flash Overlay -->
+<div id="flash" class="absolute inset-0 bg-white opacity-0 z-50 pointer-events-none transition-opacity duration-200">
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Logic -->
+<script type="module">
+    import { initStatusPoller } from "{% static 'studio/js/ui_logic.js' %}?v={% now 'U' %}";
+    initStatusPoller("{% url 'status' %}");
+</script>
+
+<!-- AR Logic -->
+<script type="module" src="{% static 'studio/js/ar_logic.js' %}?v={% now 'U' %}"></script>
+{% endblock %}

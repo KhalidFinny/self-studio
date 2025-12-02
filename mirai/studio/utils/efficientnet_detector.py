@@ -5,18 +5,24 @@ import tensorflow as tf
 from tensorflow import keras
 import os
 import mediapipe as mp
-
+from typing import Tuple, Optional, Dict, List, Any
 
 from tensorflow.keras.applications.resnet50 import preprocess_input
 
 class ResNet50GestureDetector:
-    # Kelas untuk mendeteksi gesture (palm/fist) menggunakan ResNet50
+    """
+    Gesture detector using a pre-trained ResNet50 model and MediaPipe Hands.
+    Detects 'Fist' (Class 0) and 'Palm' (Class 1).
+    """
     
-    def __init__(self, model_path="models/resnet50/best_model.keras", confidence=0.85):
-        # Inisialisasi detector
-        # Args:
-        #   model_path: Path ke model ResNet50 (.h5)
-        #   confidence: Threshold confidence untuk deteksi (default: 0.85)
+    def __init__(self, model_path: str = "models/resnet50/best_model.keras", confidence: float = 0.85):
+        """
+        Initialize the detector.
+        
+        Args:
+            model_path: Path to the .keras model file.
+            confidence: Confidence threshold for classification.
+        """
         
         # Resolve model path (relatif dari root project)
         if not os.path.isabs(model_path):
@@ -39,7 +45,7 @@ class ResNet50GestureDetector:
         # Setup MediaPipe untuk deteksi tangan
         self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(
-            static_image_mode=False,
+            static_image_mode=True, # Changed to True to fix timestamp errors with frame skipping
             max_num_hands=1,
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5
@@ -49,12 +55,17 @@ class ResNet50GestureDetector:
         # Class names (Alphabetical: 0=fist, 1=palm)
         self.class_names = ['fist', 'palm']
     
-    def preprocess_frame(self, frame, bbox=None):
-        # Preprocess frame untuk ResNet50
-        # Args:
-        #   frame: Frame gambar BGR
-        #   bbox: Bounding box (x, y, w, h) untuk crop, jika None gunakan seluruh frame
-        # Returns: Preprocessed image (224x224, RGB, normalized)
+    def preprocess_frame(self, frame: np.ndarray, bbox: Optional[Tuple[int, int, int, int]] = None) -> np.ndarray:
+        """
+        Preprocess the frame for ResNet50 inference.
+        
+        Args:
+            frame: BGR image frame.
+            bbox: Optional (x, y, w, h) bounding box to crop.
+            
+        Returns:
+            Preprocessed image batch (1, 224, 224, 3).
+        """
         
         if bbox:
             x, y, w, h = bbox
@@ -82,9 +93,13 @@ class ResNet50GestureDetector:
         
         return expanded
     
-    def detect_hand(self, frame):
-        # Deteksi tangan menggunakan MediaPipe
-        # Returns: (bbox, landmarks) atau (None, None) jika tidak terdeteksi
+    def detect_hand(self, frame: np.ndarray) -> Tuple[Optional[Tuple[int, int, int, int]], Any]:
+        """
+        Detect hand using MediaPipe.
+        
+        Returns:
+            (bbox, landmarks) or (None, None)
+        """
         
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_frame)
@@ -108,11 +123,13 @@ class ResNet50GestureDetector:
         
         return None, None
     
-    def classify_gesture(self, preprocessed_img):
-        # Klasifikasi gesture menggunakan ResNet50
-        # Args:
-        #   preprocessed_img: Image yang sudah di-preprocess
-        # Returns: (predicted_class, confidence, probabilities)
+    def classify_gesture(self, preprocessed_img: np.ndarray) -> Tuple[int, float, Tuple[float, float]]:
+        """
+        Classify the gesture using the loaded ResNet50 model.
+        
+        Returns:
+            (predicted_class, confidence, (palm_prob, fist_prob))
+        """
         
         predictions = self.model.predict(preprocessed_img, verbose=0)
         
@@ -131,9 +148,13 @@ class ResNet50GestureDetector:
         
         return predicted_class, confidence, (palm_prob, fist_prob)
     
-    def get_detection_result(self, frame):
-        # Deteksi gesture pada frame (tanpa drawing)
-        # Returns: dict result
+    def get_detection_result(self, frame: np.ndarray) -> Dict[str, Any]:
+        """
+        Perform full detection pipeline on a frame.
+        
+        Returns:
+            Dictionary containing bbox, landmarks, label, confidence, etc.
+        """
         
         bbox, landmarks = self.detect_hand(frame)
         
@@ -155,14 +176,25 @@ class ResNet50GestureDetector:
             result["predicted_class"] = predicted_class
             result["label"] = self.class_names[predicted_class]
             
-            # Cek apakah FIST terdeteksi (Class 0)
-            if predicted_class == 0 and conf >= self.confidence:
+            # Cek apakah PALM terdeteksi (Class 1)
+            # User requested PALM trigger
+            if predicted_class == 1 and conf >= self.confidence:
                 result["detected_palm"] = True
                 
         return result
 
-    def annotate_frame(self, frame, result, min_frames=5):
-        # Draw annotations based on result
+    def annotate_frame(self, frame: np.ndarray, result: Dict[str, Any], min_frames: int = 5) -> Tuple[np.ndarray, bool, bool]:
+        """
+        Draw annotations on the frame and determine if trigger should fire.
+        
+        Args:
+            frame: The image frame.
+            result: The detection result dictionary.
+            min_frames: Number of consecutive frames required for trigger stability.
+            
+        Returns:
+            (annotated_frame, detected_palm_bool, should_trigger_bool)
+        """
         if not result:
             return frame, False, False
 
@@ -172,11 +204,10 @@ class ResNet50GestureDetector:
         confidence = result.get("confidence", 0.0)
         label = result.get("label", "")
         
-        # Hitung frame berturut-turut dengan trigger gesture
-        # Note: This logic needs to be careful if we are skipping frames. 
-        # Ideally state update should happen only on new detection.
-        # But for visualization we just read the state.
-        # We will move state update to update_state method.
+        # Update state based on current detection
+        # Note: Ideally this should be separate, but for now we keep it here for visualization logic
+        # logic moved to update_state in services.py loop, but we read it here?
+        # Actually services.py calls update_state separately.
         
         should_trigger = self.fist_detected_frames >= min_frames and not self.trigger_active
 
@@ -187,13 +218,10 @@ class ResNet50GestureDetector:
             
             cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
             
-            # Draw landmarks
-            if landmarks:
-                self.mp_drawing.draw_landmarks(
-                    frame, landmarks, self.mp_hands.HAND_CONNECTIONS,
-                    self.mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2),
-                    self.mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2)
-                )
+            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+            
+            # Landmarks removed for cleaner "YOLO-style" look
+            # if landmarks: ...
             
             # Draw label
             text = f"{label} {confidence:.2f}"
@@ -206,29 +234,33 @@ class ResNet50GestureDetector:
                         
         return frame, detected_palm, should_trigger
 
-    def update_state(self, result):
-        # Update internal state based on result
+    def update_state(self, result: Dict[str, Any]) -> None:
+        """
+        Update internal state (consecutive frames) based on result.
+        """
         if result and result.get("detected_palm"):
             self.fist_detected_frames += 1
         else:
             self.fist_detected_frames = 0
 
-    def detect(self, frame, min_frames=5):
-        # Wrapper for backward compatibility
+    def detect(self, frame: np.ndarray, min_frames: int = 5) -> Tuple[np.ndarray, bool, bool]:
+        """
+        Wrapper for backward compatibility.
+        """
         result = self.get_detection_result(frame)
         self.update_state(result)
         return self.annotate_frame(frame, result, min_frames)
     
-    def reset_trigger(self):
-        # Reset status trigger
+    def reset_trigger(self) -> None:
+        """Reset trigger state."""
         self.trigger_active = False
         self.fist_detected_frames = 0
     
-    def set_trigger_active(self, value):
-        # Set status trigger
+    def set_trigger_active(self, value: bool) -> None:
+        """Set trigger active state."""
         self.trigger_active = value
     
     def __del__(self):
-        # Cleanup MediaPipe
+        """Cleanup MediaPipe resources."""
         if hasattr(self, 'hands'):
             self.hands.close()
