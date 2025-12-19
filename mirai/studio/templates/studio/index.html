@@ -32,40 +32,104 @@
         <div
             class="flex items-center gap-3 bg-black/40 px-4 py-2 rounded-full backdrop-blur-md border border-white/10 mb-2">
             <span class="text-white/80 text-xs font-medium uppercase tracking-wider">Scale</span>
-            <input type="range" id="scale-slider" min="0.1" max="2.0" step="0.1" value="0.5"
+            <input type="range" id="scale-slider" min="0.1" max="5.0" step="0.1" value="0.5"
                 class="w-32 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white hover:accent-yellow-400 transition-colors">
         </div>
 
-        <div class="flex flex-col items-center gap-2 w-full max-w-lg">
-            <div
-                class="text-white/80 text-xs font-medium tracking-wider uppercase bg-black/30 px-3 py-1 rounded-full backdrop-blur-sm">
-                Stickers
+        <div
+            class="flex items-center gap-3 bg-black/40 px-4 py-2 rounded-full backdrop-blur-md border border-white/10 mb-2">
+            <div class="flex gap-2 items-center">
+                <!-- Rotate Up (Pitch) -->
+                <button onclick="rotateBy('x', -0.2)"
+                    class="bg-white/10 hover:bg-white/30 text-white text-lg px-3 py-1 rounded transition"
+                    title="Rotate Up">⬆️</button>
+                <!-- Rotate Left (Yaw) -->
+                <button onclick="rotateBy('y', -0.2)"
+                    class="bg-white/10 hover:bg-white/30 text-white text-lg px-3 py-1 rounded transition"
+                    title="Rotate Left">⬅️</button>
+                <!-- Rotate Right (Yaw) -->
+                <button onclick="rotateBy('y', 0.2)"
+                    class="bg-white/10 hover:bg-white/30 text-white text-lg px-3 py-1 rounded transition"
+                    title="Rotate Right">➡️</button>
+                <!-- Rotate Down (Pitch) -->
+                <button onclick="rotateBy('x', 0.2)"
+                    class="bg-white/10 hover:bg-white/30 text-white text-lg px-3 py-1 rounded transition"
+                    title="Rotate Down">⬇️</button>
+
+                <!-- Reset -->
+                <button onclick="rotateModel(3.14159)"
+                    class="bg-white/10 hover:bg-white/30 text-white text-xs px-2 py-1 rounded transition ml-2">Reset</button>
             </div>
+        </div>
+
+        <div class="flex flex-col items-center gap-2 w-full max-w-lg">
+            <div class="flex items-center gap-4 mb-2">
+                <div
+                    class="text-white/80 text-xs font-medium tracking-wider uppercase bg-black/30 px-3 py-1 rounded-full backdrop-blur-sm">
+                    Stickers
+                </div>
+                <!-- Add Mode Toggle -->
+                <label class="flex items-center cursor-pointer gap-2">
+                    <div class="relative">
+                        <input type="checkbox" id="add-mode-toggle" class="sr-only peer">
+                        <div
+                            class="w-9 h-5 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-yellow-400">
+                        </div>
+                    </div>
+                    <span class="text-white/80 text-xs font-medium uppercase tracking-wider">Add Mode</span>
+                </label>
+            </div>
+
             <div
                 class="flex gap-4 overflow-x-auto w-full justify-center p-2 bg-black/20 backdrop-blur-md rounded-2xl border border-white/10">
-                <!-- Robot (Removed: Missing File) -->
-                <!-- 
-                    <button
-                        class="character-btn group relative w-14 h-14 rounded-xl overflow-hidden border-2 border-transparent transition-all duration-200 hover:scale-110 focus:outline-none"
-                        data-model="{% static 'studio/models/RobotExpressive.glb' %}">
-                        <div
-                            class="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-600 opacity-80 group-hover:opacity-100 transition">
-                        </div>
-                        <div class="absolute inset-0 flex items-center justify-center text-2xl">🤖</div>
-                        <div
-                            class="absolute bottom-0 left-0 right-0 h-1 bg-white/50 scale-x-0 group-[.active]:scale-x-100 transition-transform">
-                        </div>
-                    </button>
-                    -->
 
-                <!-- Roblox Avatar -->
+                <!-- Lavina -->
                 <button
                     class="character-btn group relative w-14 h-14 rounded-xl overflow-hidden border-2 border-transparent transition-all duration-200 hover:scale-110 focus:outline-none"
-                    data-model="{% static 'Rbolox avatar.obj' %}">
+                    data-model="{% static 'lavina/lavina.obj' %}">
                     <div
                         class="absolute inset-0 bg-gradient-to-br from-orange-500 to-red-600 opacity-80 group-hover:opacity-100 transition">
                     </div>
-                    <div class="absolute inset-0 flex items-center justify-center text-2xl">🧱</div>
+                    <div class="absolute inset-0 flex items-center justify-center text-2xl">👩</div>
+                    <div
+                        class="absolute bottom-0 left-0 right-0 h-1 bg-white/50 scale-x-0 group-[.active]:scale-x-100 transition-transform">
+                    </div>
+                </button>
+
+                <!-- Reva -->
+                <button
+                    class="character-btn group relative w-14 h-14 rounded-xl overflow-hidden border-2 border-transparent transition-all duration-200 hover:scale-110 focus:outline-none"
+                    data-model="{% static 'reva/reva.obj' %}">
+                    <div
+                        class="absolute inset-0 bg-gradient-to-br from-blue-500 to-cyan-600 opacity-80 group-hover:opacity-100 transition">
+                    </div>
+                    <div class="absolute inset-0 flex items-center justify-center text-2xl">👧</div>
+                    <div
+                        class="absolute bottom-0 left-0 right-0 h-1 bg-white/50 scale-x-0 group-[.active]:scale-x-100 transition-transform">
+                    </div>
+                </button>
+
+                <!-- Mordo -->
+                <button
+                    class="character-btn group relative w-14 h-14 rounded-xl overflow-hidden border-2 border-transparent transition-all duration-200 hover:scale-110 focus:outline-none"
+                    data-model="{% static 'mordo and riggs.png' %}">
+                    <div
+                        class="absolute inset-0 bg-gradient-to-br from-green-500 to-teal-600 opacity-80 group-hover:opacity-100 transition">
+                    </div>
+                    <div class="absolute inset-0 flex items-center justify-center text-2xl">🐦</div>
+                    <div
+                        class="absolute bottom-0 left-0 right-0 h-1 bg-white/50 scale-x-0 group-[.active]:scale-x-100 transition-transform">
+                    </div>
+                </button>
+
+                <!-- Red Ninja -->
+                <button
+                    class="character-btn group relative w-14 h-14 rounded-xl overflow-hidden border-2 border-transparent transition-all duration-200 hover:scale-110 focus:outline-none"
+                    data-model="{% static 'RED-NINJA.fbx' %}">
+                    <div
+                        class="absolute inset-0 bg-gradient-to-br from-red-600 to-red-900 opacity-80 group-hover:opacity-100 transition">
+                    </div>
+                    <div class="absolute inset-0 flex items-center justify-center text-2xl">🥷</div>
                     <div
                         class="absolute bottom-0 left-0 right-0 h-1 bg-white/50 scale-x-0 group-[.active]:scale-x-100 transition-transform">
                     </div>

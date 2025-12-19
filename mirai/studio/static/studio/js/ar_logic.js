@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 
 /**
  * ARManager
@@ -22,22 +23,28 @@ class ARManager {
             far: 1000,
             defaultScale: 0.5,
             minScale: 0.1,
-            maxScale: 2.0
+            maxScale: 5.0,
+            maxModels: 2
         };
 
         // State
         this.scene = null;
         this.camera = null;
         this.renderer = null;
-        this.currentModel = null;
-        this.mixer = null;
+        this.models = []; // Array to hold multiple models
+        this.selectedModel = null; // The model currently being interacted with
+        this.mixers = []; // Array of mixers
         this.clock = new THREE.Clock();
         
         // Interaction State
         this.isDragging = false;
         this.previousTouch = null;
+        this.previousMousePosition = { x: 0, y: 0 };
         this.initialPinchDistance = null;
         this.initialScale = null;
+        
+        // Mode
+        this.isAddMode = false;
 
         // Initialize
         this.init();
@@ -58,13 +65,8 @@ class ARManager {
         // Handle Resize
         window.addEventListener('resize', () => this.onWindowResize(), false);
 
-        // Load Initial Model if present in UI
-        const firstBtn = document.querySelector('.character-btn');
-        if (firstBtn && firstBtn.dataset.model) {
-            this.loadModel(firstBtn.dataset.model);
-            // Set active state
-            firstBtn.classList.add('active', 'ring-2', 'ring-white');
-        }
+        // Load Initial Model if present in UI (only if not empty)
+        // We'll let the user click to load to avoid confusion with multiple slots
     }
 
     setupScene() {
@@ -96,15 +98,40 @@ class ARManager {
 
     // --- Model Loading ---
 
+    toggleAddMode(enabled) {
+        this.isAddMode = enabled;
+        console.log("Add Mode:", this.isAddMode);
+    }
+
     loadModel(url) {
         console.log("Loading model:", url);
-        this.clearModel();
 
-        url = decodeURIComponent(url);
+        if (!this.isAddMode) {
+            // Replace Mode: Clear all and load new
+            this.clearAllModels();
+        } else {
+            // Add Mode: Check limit
+            if (this.models.length >= this.config.maxModels) {
+                console.warn("Max models reached. Replacing selected or last added.");
+                if (this.selectedModel) {
+                    this.removeModel(this.selectedModel);
+                } else {
+                    // Remove the oldest one (first in array)
+                    this.removeModel(this.models[0]);
+                }
+            }
+        }
+
         const isObj = url.toLowerCase().endsWith('.obj');
+        const isFbx = url.toLowerCase().endsWith('.fbx');
+        const isImg = /\.(png|jpg|jpeg)$/i.test(url);
 
         if (isObj) {
             this._loadOBJ(url);
+        } else if (isFbx) {
+            this._loadFBX(url);
+        } else if (isImg) {
+            this._loadImage(url);
         } else {
             this._loadGLTF(url);
         }
@@ -149,19 +176,58 @@ class ARManager {
         loader.load(url, (gltf) => this.onModelLoaded(gltf, true), undefined, (err) => console.error("GLTF Error:", err));
     }
 
-    onModelLoaded(loadedData, isGltf) {
-        this.currentModel = isGltf ? loadedData.scene : loadedData;
+    _loadFBX(url) {
+        const loader = new FBXLoader();
+        loader.load(url, (fbx) => this.onModelLoaded(fbx, false, true), undefined, (err) => console.error("FBX Error:", err));
+    }
+
+    _loadImage(url) {
+        const loader = new THREE.TextureLoader();
+        loader.load(url, (texture) => {
+            const material = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(1, texture.image.height / texture.image.width, 1);
+            // Pass true for isSprite
+            this.onModelLoaded(sprite, false, false, true);
+        }, undefined, (err) => console.error("Image Error:", err));
+    }
+
+    onModelLoaded(loadedData, isGltf, isFbx = false, isSprite = false) {
+        let model = isGltf ? loadedData.scene : loadedData;
 
         // Center
-        const box = new THREE.Box3().setFromObject(this.currentModel);
+        const box = new THREE.Box3().setFromObject(model);
         const center = box.getCenter(new THREE.Vector3());
-        this.currentModel.position.sub(center);
+        model.position.sub(center);
 
-        // Scale
-        this.currentModel.scale.set(this.config.defaultScale, this.config.defaultScale, this.config.defaultScale);
+        // Auto-Scale Logic
+        // Normalize to fit within a target size (e.g., 3 units height)
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        // Larger target for sprites (they feel smaller)
+        const targetSize = isSprite ? 2.5 : 1.5; 
+        
+        let scaleFactor = targetSize / maxDim;
+        
+        // Prevent upsizing too much if model is tiny, but definitely downsize if huge
+        // Also respect config limits if possible, but auto-scale should override default
+        if (!isFinite(scaleFactor) || scaleFactor === 0) scaleFactor = 1.0;
+        
+        this.config.defaultScale = scaleFactor; // Update default for this model
+        model.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+        // Rotation (Face Camera)
+        model.rotation.y = Math.PI; // Face front
+        model.rotation.x = 0;
+        model.rotation.z = 0;
+
+        // Offset if multiple models to avoid overlap
+        if (this.models.length > 0) {
+            model.position.x += 1.0; // Simple offset
+        }
 
         // Force Opacity (Fix Ghosting)
-        this.currentModel.traverse((child) => {
+        model.traverse((child) => {
             if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
@@ -177,12 +243,22 @@ class ARManager {
             }
         });
 
-        this.scene.add(this.currentModel);
+        this.scene.add(model);
+        this.models.push(model);
+        this.selectModel(model);
 
         // Animation
         if (isGltf && loadedData.animations && loadedData.animations.length) {
-            this.mixer = new THREE.AnimationMixer(this.currentModel);
-            this.mixer.clipAction(loadedData.animations[0]).play();
+            const mixer = new THREE.AnimationMixer(model);
+            mixer.clipAction(loadedData.animations[0]).play();
+            this.mixers.push(mixer);
+            model.userData.mixer = mixer; // Link mixer to model
+        } else if (isFbx && model.animations && model.animations.length) {
+            const mixer = new THREE.AnimationMixer(model);
+            const action = mixer.clipAction(model.animations[0]);
+            action.play();
+            this.mixers.push(mixer);
+            model.userData.mixer = mixer;
         }
         
         // Update Slider if exists
@@ -190,11 +266,52 @@ class ARManager {
         if (slider) slider.value = this.config.defaultScale;
     }
 
-    clearModel() {
-        if (this.currentModel) {
-            this.scene.remove(this.currentModel);
-            this.currentModel = null;
-            this.mixer = null;
+    removeModel(model) {
+        if (!model) return;
+        
+        this.scene.remove(model);
+        
+        // Remove from array
+        const index = this.models.indexOf(model);
+        if (index > -1) {
+            this.models.splice(index, 1);
+        }
+
+        // Remove mixer
+        if (model.userData.mixer) {
+            const mIndex = this.mixers.indexOf(model.userData.mixer);
+            if (mIndex > -1) this.mixers.splice(mIndex, 1);
+        }
+
+        if (model.userData.helper) {
+            this.scene.remove(model.userData.helper);
+            model.userData.helper.geometry.dispose();
+            model.userData.helper = null;
+        }
+
+        if (this.selectedModel === model) {
+            this.selectedModel = null;
+        }
+    }
+
+    clearAllModels() {
+        // Create a copy to iterate safely
+        const models = [...this.models];
+        models.forEach(m => this.removeModel(m));
+    }
+
+    selectModel(model) {
+        this.selectedModel = model;
+        // Hide helpers for all
+        this.models.forEach(m => {
+            if (m.userData.helper) m.userData.helper.visible = false;
+        });
+        // Show helper for selected
+        if (model) {
+            this._showHelper(model, true);
+            // Update slider
+            const slider = document.getElementById('scale-slider');
+            if (slider) slider.value = model.scale.x;
         }
     }
 
@@ -215,23 +332,36 @@ class ARManager {
 
     // Raycasting Helper
     _raycast(x, y) {
-        if (!this.currentModel) return [];
+        if (this.models.length === 0) return [];
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         mouse.x = (x / window.innerWidth) * 2 - 1;
         mouse.y = -(y / window.innerHeight) * 2 + 1;
         raycaster.setFromCamera(mouse, this.camera);
-        return raycaster.intersectObjects([this.currentModel], true);
+        // Intersect all models
+        return raycaster.intersectObjects(this.models, true);
+    }
+
+    _getModelFromIntersect(intersect) {
+        // Traverse up to find the root model object
+        let obj = intersect.object;
+        while (obj.parent && obj.parent !== this.scene) {
+            obj = obj.parent;
+        }
+        return obj;
     }
 
     onPointerDown(e) {
         const intersects = this._raycast(e.clientX, e.clientY);
         if (intersects.length > 0) {
+            const model = this._getModelFromIntersect(intersects[0]);
+            this.selectModel(model);
             this.isDragging = true;
-            this._showHelper(true);
+            this.previousMousePosition = { x: e.clientX, y: e.clientY };
         } else {
+            // Deselect if clicked empty space? Maybe keep selected for ease of use.
+            // this.selectModel(null);
             this.isDragging = false;
-            this._showHelper(false);
         }
     }
 
@@ -240,14 +370,20 @@ class ARManager {
         const intersects = this._raycast(e.clientX, e.clientY);
         document.body.style.cursor = intersects.length > 0 ? 'pointer' : 'default';
 
-        if (!this.isDragging || !this.currentModel) return;
+        if (!this.isDragging || !this.selectedModel) return;
 
         // Drag Logic (Camera Plane)
         const factor = 0.005 * (this.camera.position.z / 2);
-        this.currentModel.position.x += e.movementX * factor;
-        this.currentModel.position.y -= e.movementY * factor;
         
-        this._updateHelper();
+        const deltaX = e.clientX - this.previousMousePosition.x;
+        const deltaY = e.clientY - this.previousMousePosition.y;
+        
+        this.selectedModel.position.x += deltaX * factor;
+        this.selectedModel.position.y -= deltaY * factor;
+        
+        this.previousMousePosition = { x: e.clientX, y: e.clientY };
+        
+        this._updateHelper(this.selectedModel);
     }
 
     onPointerUp() {
@@ -256,7 +392,7 @@ class ARManager {
 
     onWheel(e) {
         e.preventDefault();
-        if (!this.currentModel) return;
+        if (!this.selectedModel) return;
         
         const delta = -Math.sign(e.deltaY) * 0.1;
         this._applyScale(delta);
@@ -268,34 +404,34 @@ class ARManager {
             const touch = e.touches[0];
             const intersects = this._raycast(touch.clientX, touch.clientY);
             if (intersects.length > 0) {
+                const model = this._getModelFromIntersect(intersects[0]);
+                this.selectModel(model);
                 this.isDragging = true;
                 this.previousTouch = touch;
-                this._showHelper(true);
             } else {
                 this.isDragging = false;
-                this._showHelper(false);
             }
         } else if (e.touches.length === 2) {
             this.isDragging = false;
             this.initialPinchDistance = this._getDistance(e.touches[0], e.touches[1]);
-            if (this.currentModel) this.initialScale = this.currentModel.scale.x;
+            if (this.selectedModel) this.initialScale = this.selectedModel.scale.x;
         }
     }
 
     onTouchMove(e) {
         e.preventDefault();
-        if (e.touches.length === 1 && this.isDragging && this.currentModel) {
+        if (e.touches.length === 1 && this.isDragging && this.selectedModel) {
             const touch = e.touches[0];
             const factor = 0.005 * (this.camera.position.z / 2);
             const dx = (touch.clientX - this.previousTouch.clientX) * factor;
             const dy = -(touch.clientY - this.previousTouch.clientY) * factor; // Invert Y
             
-            this.currentModel.position.x += dx;
-            this.currentModel.position.y += dy;
+            this.selectedModel.position.x += dx;
+            this.selectedModel.position.y += dy;
             this.previousTouch = touch;
-            this._updateHelper();
+            this._updateHelper(this.selectedModel);
 
-        } else if (e.touches.length === 2 && this.currentModel && this.initialPinchDistance) {
+        } else if (e.touches.length === 2 && this.selectedModel && this.initialPinchDistance) {
             const dist = this._getDistance(e.touches[0], e.touches[1]);
             const scaleFactor = dist / this.initialPinchDistance;
             const newScale = this.initialScale * scaleFactor;
@@ -314,38 +450,55 @@ class ARManager {
         return Math.sqrt(dx*dx + dy*dy);
     }
 
-    _showHelper(visible) {
-        if (!this.currentModel) return;
-        if (!this.currentModel.userData.helper) {
-            const helper = new THREE.BoxHelper(this.currentModel, 0xffff00);
+    _showHelper(model, visible) {
+        if (!model) return;
+        if (!model.userData.helper) {
+            const helper = new THREE.BoxHelper(model, 0xffff00);
             this.scene.add(helper);
-            this.currentModel.userData.helper = helper;
+            model.userData.helper = helper;
         }
-        this.currentModel.userData.helper.visible = visible;
+        model.userData.helper.visible = visible;
     }
 
-    _updateHelper() {
-        if (this.currentModel && this.currentModel.userData.helper) {
-            this.currentModel.userData.helper.update();
+    _updateHelper(model) {
+        if (model && model.userData.helper) {
+            model.userData.helper.update();
         }
     }
 
     // --- Scaling ---
 
     _applyScale(delta) {
-        if (!this.currentModel) return;
-        const newScale = this.currentModel.scale.x + delta;
+        if (!this.selectedModel) return;
+        const newScale = this.selectedModel.scale.x + delta;
         this.setScale(newScale);
     }
 
     setScale(val) {
-        if (!this.currentModel) return;
+        if (!this.selectedModel) return;
         const clamped = Math.min(Math.max(val, this.config.minScale), this.config.maxScale);
-        this.currentModel.scale.set(clamped, clamped, clamped);
+        this.selectedModel.scale.set(clamped, clamped, clamped);
         
         // Sync UI
         const slider = document.getElementById('scale-slider');
         if (slider) slider.value = clamped;
+        
+        this._updateHelper(this.selectedModel);
+    }
+
+    // --- Rotation ---
+
+    rotateTo(angle) {
+        if (!this.selectedModel) return;
+        this.selectedModel.rotation.y = angle;
+        this._updateHelper(this.selectedModel);
+    }
+    
+    rotateBy(axis, angle) {
+        if (!this.selectedModel) return;
+        // axis: 'x', 'y', 'z'
+        this.selectedModel.rotation[axis] += angle;
+        this._updateHelper(this.selectedModel);
     }
 
     // --- UI & Loop ---
@@ -356,17 +509,24 @@ class ARManager {
             btn.addEventListener('click', (e) => {
                 const target = e.currentTarget;
                 
-                // Update Active UI
-                document.querySelectorAll('.character-btn').forEach(b => b.classList.remove('active', 'ring-2', 'ring-white'));
-                target.classList.add('active', 'ring-2', 'ring-white');
-
-                if (target.dataset.model) {
-                    this.loadModel(target.dataset.model);
-                } else {
-                    this.clearModel();
+                // If it's the clear button
+                if (!target.dataset.model) {
+                    this.clearAllModels();
+                    return;
                 }
+
+                // Load Model
+                this.loadModel(target.dataset.model);
             });
         });
+
+        // Add Mode Toggle
+        const addModeToggle = document.getElementById('add-mode-toggle');
+        if (addModeToggle) {
+            addModeToggle.addEventListener('change', (e) => {
+                this.toggleAddMode(e.target.checked);
+            });
+        }
 
         // Scale Slider
         const slider = document.getElementById('scale-slider');
@@ -387,7 +547,9 @@ class ARManager {
     animate() {
         requestAnimationFrame(this.animate);
         const delta = this.clock.getDelta();
-        if (this.mixer) this.mixer.update(delta);
+        
+        this.mixers.forEach(mixer => mixer.update(delta));
+        
         if (this.renderer && this.scene && this.camera) {
             this.renderer.render(this.scene, this.camera);
         }
@@ -415,19 +577,17 @@ class ARManager {
 
         // Draw AR
         if (this.renderer && this.scene && this.camera) {
-            // Hide helper
-            let helperVisible = false;
-            if (this.currentModel && this.currentModel.userData.helper) {
-                helperVisible = this.currentModel.userData.helper.visible;
-                this.currentModel.userData.helper.visible = false;
-            }
+            // Hide helpers
+            this.models.forEach(m => {
+                if (m.userData.helper) m.userData.helper.visible = false;
+            });
 
             this.renderer.render(this.scene, this.camera);
             ctx.drawImage(this.renderer.domElement, 0, 0, canvas.width, canvas.height);
 
-            // Restore helper
-            if (this.currentModel && this.currentModel.userData.helper) {
-                this.currentModel.userData.helper.visible = helperVisible;
+            // Restore helper for selected
+            if (this.selectedModel && this.selectedModel.userData.helper) {
+                this.selectedModel.userData.helper.visible = true;
             }
         }
 
@@ -443,4 +603,6 @@ class ARManager {
 const arManager = new ARManager('ar-container');
 window.arManager = arManager;
 window.takePhoto = () => arManager.takePhoto();
-window.clearModel = () => arManager.clearModel();
+window.clearModel = () => arManager.clearAllModels();
+window.rotateModel = (angle) => arManager.rotateTo(angle);
+window.rotateBy = (axis, angle) => arManager.rotateBy(axis, angle);
